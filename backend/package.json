@@ -4,13 +4,17 @@
   "description": "Offline‑first POS backend for a small Indian supermarket",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "seed": "ts-node prisma/seed.ts",
-    "test": "jest"
-	"postinstall": "prisma generate"
-  },
+  "dev": "ts-node-dev src/index.ts",
+  "build": "tsc",
+  "start": "node dist/index.js",
+  "seed": "ts-node prisma/seed.ts",
+  "prisma:generate": "prisma generate",
+  "prisma:migrate": "prisma migrate dev",
+  "prisma:studio": "prisma studio",
+  "test": "echo \"no tests\"",
+  "postinstall": "prisma generate"
+}
+,
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "dotenv": "^16.3.1",

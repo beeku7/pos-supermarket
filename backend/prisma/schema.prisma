@@ -251,6 +251,7 @@ model PaymentMethod {
   name     String
   // Additional metadata for gateways is stored as a JSON string.  SQLite does not support Json type so use String.
   meta     String?
+  active   Boolean   @default(true)
   payments Payment[]
 }
 
@@ -322,6 +323,7 @@ model AuditLog {
 // enforce one row per setting.
 model Setting {
   id    Int    @id @default(autoincrement())
-  key   String @unique
+  key   String @id
   value String
+  updatedAt DateTime @updatedAt
 }

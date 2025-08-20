@@ -596,6 +596,62 @@ app.post('/api/checkout/updateLine', async (req, res) => {
   }
 });
 
+// SETTINGS
+app.get('/api/admin/settings', async (_req, res) => {
+  const rows = await prisma.setting.findMany();
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = r.value;
+  res.json(map);
+});
+
+app.put('/api/admin/settings', async (req, res) => {
+  const body = req.body as Record<string, string>;
+  try {
+    const entries = Object.entries(body || {});
+    for (const [key, value] of entries) {
+      await prisma.setting.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      });
+    }
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// PAYMENT METHODS CRUD (list/create/update)
+app.get('/api/payment-methods', async (_req, res) => {
+  const methods = await prisma.paymentMethod.findMany({ orderBy: { code: 'asc' } });
+  res.json(methods);
+});
+
+app.post('/api/payment-methods', async (req, res) => {
+  try {
+    const { code, name, active = true } = req.body || {};
+    const pm = await prisma.paymentMethod.create({ data: { code, name, active } });
+    res.status(201).json(pm);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/payment-methods/:code', async (req, res) => {
+  try {
+    const code = req.params.code;
+    const { name, active } = req.body || {};
+    const pm = await prisma.paymentMethod.update({
+      where: { code },
+      data: { ...(name != null ? { name } : {}), ...(active != null ? { active } : {}) },
+    });
+    res.json(pm);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+
 /**
  * Remove a line by index
  * body: { cartId, lineIndex }
