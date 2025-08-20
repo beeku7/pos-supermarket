@@ -3,7 +3,7 @@
 This repository contains a complete offline‑first POS (point‑of‑sale) system for a small Indian supermarket.  It
 includes a Node.js/Prisma backend with SQLite, a React frontend optimised for keyboard use, seed data, an
 OpenAPI specification and comprehensive documentation.  The system supports GST compliance, multiple
-payment methods (cash, card, UPI, wallets), basic inventory/purchasing and simple promotion rules.
+payment methods (cash, card, UPI, wallets), basic inventory/purchasing and simple promotion rules. .
 
 ## Architecture Overview
 
