@@ -11,6 +11,7 @@
     "test": "jest",
 	"postinstall": "prisma generate"
   },
+  
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "dotenv": "^16.3.1",
