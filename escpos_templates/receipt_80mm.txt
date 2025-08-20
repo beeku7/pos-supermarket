@@ -1,0 +1,35 @@
+--------------------------------------------------------------------
+                    {{STORE_NAME}}
+               {{STORE_ADDRESS}}
+                GSTIN: {{STORE_GSTIN}}
+--------------------------------------------------------------------
+Receipt No: {{RECEIPT_NO}}      Date: {{DATE}}
+Cashier: {{CASHIER_NAME}}
+
+Item                   Qty     Rate    Amt   Tax
+-------------------------------------------------
+{{#each LINES}}
+{{padRight name 20}} {{padLeft qty 5}} {{padLeft rate 7}} {{padLeft amount 7}} {{padLeft tax 6}}
+{{/each}}
+-------------------------------------------------
+Subtotal:                                  {{SUBTOTAL}}
+Discount:                                  {{DISCOUNT}}
+CGST ({{CGST_RATE}}%):                      {{CGST_AMOUNT}}
+SGST ({{SGST_RATE}}%):                      {{SGST_AMOUNT}}
+IGST ({{IGST_RATE}}%):                      {{IGST_AMOUNT}}
+Cess:                                      {{CESS_AMOUNT}}
+-------------------------------------------------
+TOTAL:                                     {{TOTAL}}
+
+Payment Mode(s):
+{{#each PAYMENTS}}
+{{method}}: {{amount}}
+{{/each}}
+
+{{#if UPI_QR}}
+Scan to pay:
+{{UPI_QR}}
+{{/if}}
+
+Thank you for shopping!
+--------------------------------------------------------------------

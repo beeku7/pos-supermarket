@@ -1,0 +1,26 @@
+{
+  "name": "pos-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "clsx": "^1.2.1",
+    "qrcode": "^1.5.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.16.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.17",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.1.0",
+    "connect-history-api-fallback": "^2.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^4.3.9"
+  }
+}

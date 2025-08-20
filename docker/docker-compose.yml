@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: pos-backend
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/pos.db
+      - STORE_NAME=${STORE_NAME:-My Supermarket}
+      - STORE_GSTIN=${STORE_GSTIN:-27AABCU9603R1ZV}
+      - STORE_ADDRESS=${STORE_ADDRESS:-123 Main Road, Bengaluru}
+      - PLACE_OF_SUPPLY=${PLACE_OF_SUPPLY:-KA}
+      - UPI_VPA=${UPI_VPA:-mysupermarket@upi}
+      - UPI_PAYER_NAME=${UPI_PAYER_NAME:-My Supermarket Pvt Ltd}
+    volumes:
+      - pos-db:/data
+    ports:
+      - "3000:3000"
+    depends_on:
+      - couchdb
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: pos-frontend
+    environment:
+      - VITE_API_BASE=http://backend:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+  couchdb:
+    image: couchdb:3
+    container_name: pos-couchdb
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=admin
+    ports:
+      - "5984:5984"
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+volumes:
+  pos-db:
+  couchdb-data:

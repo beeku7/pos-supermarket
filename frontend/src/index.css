@@ -1,0 +1,28 @@
+/* Basic reset and layout for the POS UI */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: #f7f7f7;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.navbar {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #333;
+}
+
+.navbar a {
+  color: white;
+  text-decoration: none;
+}
+
+.navbar a:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,327 @@
+// Prisma schema defining the SQLite data model for the supermarket POS.
+// We use this schema to generate migration scripts and type-safe database
+// clients.  The application is local‑first and uses SQLite as its primary
+// datastore.  SQLite is particularly well suited for embedded/offline
+// applications because it is small, fast and reliable【366647749549088†L39-L60】.
+//
+// Note: In a production deployment with multiple terminals the same schema
+// would also be used on a central server (e.g. PostgreSQL) and synchronised
+// using a custom sync layer or CouchDB replication.  Fields such as
+// `createdAt`/`updatedAt` are deliberately included for conflict
+// resolution.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Categorical grouping of items (e.g. Grocery, Snacks, Household).
+model Category {
+  id          Int     @id @default(autoincrement())
+  name        String @unique
+  description String?
+  items       Item[]
+}
+
+// Tax rates defined by the government.  India uses GST slabs such as
+// 0%, 5%, 12%, 18% and 28%, with optional cess on certain goods.
+model Tax {
+  id            Int                 @id @default(autoincrement())
+  name          String @unique // descriptive name (e.g. "GST 5%")
+  rate          Float // percentage rate (e.g. 5.0 for 5%)
+  cess          Float // optional cess rate
+  hsn           String? // Harmonised System of Nomenclature code for the tax rate
+  // Relations to other models.  We name each relation to avoid ambiguity because multiple models reference Tax.
+  items         Item[]              @relation("ItemTax") // Items taxed at this rate
+  purchaseLines PurchaseOrderLine[] @relation("PurchaseOrderLineTax") // Purchase order lines using this tax
+  receiptLines  ReceiptLine[]       @relation("ReceiptLineTax") // Receipt lines using this tax
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+// Core item definition.  Each SKU can have multiple barcodes (EAN‑13, UPC,
+// price‑embedded codes).  Items belong to categories and are taxed
+// according to a Tax slab.  We also track MRP (maximum retail price), cost,
+// reorder level and other metadata.
+model Item {
+  id            Int                 @id @default(autoincrement())
+  sku           String              @unique
+  name          String
+  description   String?
+  categoryId    Int?
+  category      Category?           @relation(fields: [categoryId], references: [id])
+  taxId         Int?
+  // Tax relation uses a named relation to avoid ambiguity because Tax is referenced by multiple models
+  tax           Tax?                @relation("ItemTax", fields: [taxId], references: [id])
+  hsnCode       String?
+  brand         String?
+  unit          String              @default("pcs") // pieces, kg, etc.
+  mrp           Float // maximum retail price in INR
+  cost          Float // purchase cost per unit
+  reorderLevel  Float? // reorder threshold
+  imageUrl      String?
+  isWeighable   Boolean             @default(false) // true for produce sold by weight
+  barcodes      Barcode[]
+  batches       Batch[]
+  receiptLines  ReceiptLine[]
+  purchaseLines PurchaseOrderLine[]
+  stockEntries  StockLedger[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+// Barcode definitions for items.  Primary barcodes are used when scanning.
+model Barcode {
+  id        Int     @id @default(autoincrement())
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id])
+  code      String  @unique
+  isPrimary Boolean @default(false)
+}
+
+// Customer definition.  A basic CRM allowing phone‑based lookup and
+// loyalty points accrual.  Loyalty points can be earned and redeemed.
+model Customer {
+  id            Int       @id @default(autoincrement())
+  phone         String?   @unique
+  name          String?
+  email         String?
+  birthDate     DateTime?
+  loyaltyPoints Int       @default(0)
+  receipts      Receipt[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Vendor / supplier definition for purchasing.
+model Vendor {
+  id             Int             @id @default(autoincrement())
+  name           String
+  gstin          String?
+  address        String?
+  phone          String?
+  contactPerson  String?
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// Purchase order header.  Represents a commitment to buy goods from a vendor.
+model PurchaseOrder {
+  id           Int                 @id @default(autoincrement())
+  orderNumber  String              @unique
+  vendorId     Int
+  vendor       Vendor              @relation(fields: [vendorId], references: [id])
+  orderDate    DateTime            @default(now())
+  expectedDate DateTime?
+  status       String // Draft, Ordered, Received, Cancelled
+  lines        PurchaseOrderLine[]
+  receipts     GoodsReceipt[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+// Lines belonging to a purchase order.
+model PurchaseOrderLine {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  itemId          Int
+  item            Item          @relation(fields: [itemId], references: [id])
+  quantity        Float
+  unitCost        Float
+  taxId           Int?
+  // Link to Tax uses a named relation because Tax is referenced by multiple models
+  tax             Tax?          @relation("PurchaseOrderLineTax", fields: [taxId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// Goods receipt note (GRN) when items are received from a purchase order.
+model GoodsReceipt {
+  id              Int            @id @default(autoincrement())
+  purchaseOrderId Int?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  receiptNumber   String         @unique
+  receiptDate     DateTime       @default(now())
+  vendorInvoiceNo String?
+  totalAmount     Float
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  batches         Batch[]
+}
+
+// Batch information for items.  Supports expiry‑based inventory (FIFO) and
+// valuation.  Each batch belongs to an item and optionally to a GRN.
+model Batch {
+  id              Int           @id @default(autoincrement())
+  itemId          Int
+  item            Item          @relation(fields: [itemId], references: [id])
+  goodsReceiptId  Int?
+  goodsReceipt    GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id])
+  batchNo         String?
+  expiryDate      DateTime?
+  manufactureDate DateTime?
+  quantity        Float // remaining quantity on hand
+  cost            Float // cost per unit for this batch
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  receiptLines    ReceiptLine[]
+  stockEntries    StockLedger[]
+}
+
+// Stock ledger records every stock movement: purchases, sales, returns,
+// adjustments etc.  It helps derive stock on hand and cost of goods sold.
+model StockLedger {
+  id        Int      @id @default(autoincrement())
+  itemId    Int
+  item      Item     @relation(fields: [itemId], references: [id])
+  batchId   Int?
+  batch     Batch?   @relation(fields: [batchId], references: [id])
+  entryDate DateTime @default(now())
+  type      String // PURCHASE, SALE, RETURN, ADJUSTMENT
+  reference String? // reference document or receipt number
+  quantity  Float // positive for stock in, negative for stock out
+  unitCost  Float // cost per unit (for purchases)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Promotions table.  Supports generic percentage/amount discounts and
+// mix‑and‑match offers.  More complex promotion logic can be implemented in
+// application code.  Priority determines application order when multiple
+// promotions apply.
+
+// Receipt header.  Represents a completed sale or return.  Holds totals
+// and tax breakdowns.  `status` is Completed or Returned.  `holdRef` links
+// to a temporarily held transaction.
+model Receipt {
+  id                  Int           @id @default(autoincrement())
+  receiptNumber       String        @unique
+  date                DateTime      @default(now())
+  customerId          Int?
+  customer            Customer?     @relation(fields: [customerId], references: [id])
+  totalBeforeDiscount Float
+  totalDiscount       Float
+  totalTax            Float
+  totalAmount         Float
+  cgst                Float
+  sgst                Float
+  igst                Float
+  cess                Float
+  status              String        @default("COMPLETED")
+  holdRef             String?
+  lines               ReceiptLine[]
+  payments            Payment[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+// Individual sale lines belonging to a receipt.  Each line references
+// an item and optionally a batch (for FIFO).  Tax rate is stored to
+// preserve the tax context at time of sale.
+model ReceiptLine {
+  id        Int     @id @default(autoincrement())
+  receiptId Int
+  receipt   Receipt @relation(fields: [receiptId], references: [id])
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id])
+  batchId   Int?
+  batch     Batch?  @relation(fields: [batchId], references: [id])
+  quantity  Float
+  unitPrice Float
+  discount  Float   @default(0)
+  taxAmount Float
+  lineTotal Float // (unitPrice * quantity) - discount + taxAmount
+  taxRateId Int?
+  // Tax relation for receipts uses a named relation to avoid ambiguity
+  taxRate   Tax?    @relation("ReceiptLineTax", fields: [taxRateId], references: [id])
+}
+
+// Payment methods available in the system.  Examples: CASH, CARD, UPI,
+// WALLET, GIFT_CARD, STORE_CREDIT.  Additional metadata like payment
+// provider codes can be stored in `meta` as JSON.
+model PaymentMethod {
+  id       Int       @id @default(autoincrement())
+  code     String    @unique
+  name     String
+  // Additional metadata for gateways is stored as a JSON string.  SQLite does not support Json type so use String.
+  meta     String?
+  payments Payment[]
+}
+
+// Payment record tied to a receipt.  Supports split payments.  `status`
+// captures success/failure/refund states.  `reference` holds UPI/transaction
+// identifiers.  When refunds are processed, a new payment is created
+// referencing the original via `parentPaymentId`.
+model Payment {
+  id              Int           @id @default(autoincrement())
+  receiptId       Int
+  receipt         Receipt       @relation(fields: [receiptId], references: [id])
+  paymentMethodId Int
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  amount          Float
+  reference       String?
+  status          String        @default("SUCCESS") // SUCCESS, FAILED, REFUNDED
+  parentPaymentId Int?
+  parentPayment   Payment?      @relation("PaymentParent", fields: [parentPaymentId], references: [id])
+  refundPayments  Payment[]     @relation("PaymentParent")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// System users.  Passwords are stored as hashed strings.  Roles define
+// permissions; we use a separate Role table for flexibility.  Users can
+// authenticate using a PIN (for quick manager overrides).  `active`
+// indicates if the account is locked.
+model User {
+  id        Int        @id @default(autoincrement())
+  username  String     @unique
+  password  String
+  pin       String?
+  fullName  String
+  roleId    Int
+  role      Role       @relation(fields: [roleId], references: [id])
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+}
+
+// Role definitions with a simple name and optional JSON permissions
+// field for fine‑grained control.  E.g. Admin, Supervisor, Cashier.
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  // Permissions stored as a JSON string for SQLite compatibility
+  permissions String?
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Audit log capturing critical events such as voids, returns,
+// discounts, price overrides, no‑sale etc.  Helps meet
+// compliance requirements.
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+// Application settings stored as key‑value pairs.  This includes
+// GSTIN, business details, place of supply, rounding rules etc.  All
+// values are stored as strings for flexibility.  Unique keys
+// enforce one row per setting.
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}

@@ -1,0 +1,498 @@
+openapi: 3.1.0
+info:
+  title: Supermarket POS API
+  version: 1.0.0
+  description: |
+    This OpenAPI document describes the RESTful API exposed by the POS backend.  The API is designed to be
+    consumed by the React/Electron client and optionally by external integrations (e.g. central reporting or
+    payment gateways).  All monetary values are expressed in INR and follow Indian numbering formatting.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/items:
+    get:
+      summary: List or search items
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Partial match on item name or SKU
+      responses:
+        '200':
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+    post:
+      summary: Create a new item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreate'
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+
+  /api/items/{id}:
+    get:
+      summary: Get an item by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Item detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          description: Item not found
+    put:
+      summary: Update an existing item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemUpdate'
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          description: Item not found
+    delete:
+      summary: Delete an item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Item deleted
+        '404':
+          description: Item not found
+
+  /api/checkout/start:
+    post:
+      summary: Start a new checkout session
+      responses:
+        '200':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cartId:
+                    type: string
+                    description: Unique identifier for the cart
+
+  /api/checkout/scan:
+    post:
+      summary: Scan a barcode or add an item to the cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cartId:
+                  type: string
+                barcode:
+                  type: string
+                itemId:
+                  type: integer
+                quantity:
+                  type: number
+                  default: 1
+              required:
+                - cartId
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart:
+                    $ref: '#/components/schemas/Cart'
+        '404':
+          description: Cart or item not found
+
+  /api/checkout/discount:
+    post:
+      summary: Apply a discount to a cart or specific line
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cartId:
+                  type: string
+                lineIndex:
+                  type: integer
+                  nullable: true
+                discountPercent:
+                  type: number
+              required:
+                - cartId
+      responses:
+        '200':
+          description: Cart with updated discounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart:
+                    $ref: '#/components/schemas/Cart'
+        '404':
+          description: Cart not found
+
+  /api/checkout/complete:
+    post:
+      summary: Complete a sale and generate a receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cartId:
+                  type: string
+                customerId:
+                  type: integer
+                  nullable: true
+                payments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      methodCode:
+                        type: string
+                      amount:
+                        type: number
+                      reference:
+                        type: string
+      responses:
+        '200':
+          description: Receipt created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+        '404':
+          description: Cart not found
+
+  /api/payment-methods:
+    get:
+      summary: List available payment methods
+      responses:
+        '200':
+          description: Payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethod'
+    post:
+      summary: Create a new payment method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentMethodCreate'
+      responses:
+        '201':
+          description: Payment method created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+
+  /api/reports/daily_z:
+    get:
+      summary: Generate the daily Z report
+      responses:
+        '200':
+          description: Daily summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  totalSales:
+                    type: number
+                  paymentSummary:
+                    type: object
+                    additionalProperties:
+                      type: number
+
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        categoryId:
+          type: integer
+          nullable: true
+        taxId:
+          type: integer
+          nullable: true
+        hsnCode:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        unit:
+          type: string
+        mrp:
+          type: number
+        cost:
+          type: number
+        reorderLevel:
+          type: number
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        isWeighable:
+          type: boolean
+        barcodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Barcode'
+        tax:
+          $ref: '#/components/schemas/Tax'
+        category:
+          $ref: '#/components/schemas/Category'
+    ItemCreate:
+      allOf:
+        - $ref: '#/components/schemas/Item'
+      required:
+        - sku
+        - name
+        - mrp
+        - cost
+    ItemUpdate:
+      allOf:
+        - $ref: '#/components/schemas/Item'
+    Barcode:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        isPrimary:
+          type: boolean
+    Tax:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        rate:
+          type: number
+        cess:
+          type: number
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    Cart:
+      type: object
+      properties:
+        id:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartLine'
+    CartLine:
+      type: object
+      properties:
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        discount:
+          type: number
+        taxRateId:
+          type: integer
+          nullable: true
+        taxAmount:
+          type: number
+        lineTotal:
+          type: number
+    Receipt:
+      type: object
+      properties:
+        id:
+          type: integer
+        receiptNumber:
+          type: string
+        date:
+          type: string
+          format: date-time
+        customerId:
+          type: integer
+          nullable: true
+        totalBeforeDiscount:
+          type: number
+        totalDiscount:
+          type: number
+        totalTax:
+          type: number
+        totalAmount:
+          type: number
+        cgst:
+          type: number
+        sgst:
+          type: number
+        igst:
+          type: number
+        cess:
+          type: number
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptLine'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+    ReceiptLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: integer
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        discount:
+          type: number
+        taxAmount:
+          type: number
+        lineTotal:
+          type: number
+        taxRateId:
+          type: integer
+          nullable: true
+    Payment:
+      type: object
+      properties:
+        id:
+          type: integer
+        paymentMethodId:
+          type: integer
+        amount:
+          type: number
+        reference:
+          type: string
+          nullable: true
+        status:
+          type: string
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+          nullable: true
+    PaymentMethodCreate:
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+          nullable: true

@@ -1,0 +1,9 @@
+.cashier-container table th,
+.cashier-container table td {
+  border-bottom: 1px solid #ddd;
+  padding: 0.5rem;
+}
+
+.cashier-container table tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
